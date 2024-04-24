@@ -1,0 +1,1294 @@
+operations:
+
+  Write_Byte:  0x00
+  Write_Burst: 0x40
+  Read_Byte:   0x80
+  Read_Burst:  0xC0
+
+status:
+
+  STATUS_BYTE:
+    description: |
+      Chip Status Byte
+      When the header byte, data byte, or command strobe is sent on the SPI interface,
+      the chip status byte is sent by the CC120X on the SO pin. The status byte contains
+      key status signals, useful for the MCU.
+      The first bit, S7, is the CHIP_RDYn signal.
+      The CHIP_RDYn signal must go low before the first positive edge of SCLK.
+      The CHIP_RDYn signal indicates that the crystal is stable.
+      S6, S5, and S4 comprise the STATE value which reflects the state of the chip.
+      In IDLE state the XOSC and power to the digital core are on and all other
+      modules are in power down.
+      Unless otherwise stated, registers should not be changed unless the chip is in IDLE state.
+
+    devices:
+      - cc11xx
+      - cc120x
+
+    fields:
+      CHIP_RDYn:
+        description: |
+          Stays high until power and crystal have stabilized.
+          Should always be low when using the SPI interface.
+        pos:  7
+        bits: 1
+      STATE:
+        description: Indicates the current main state machine mode.
+        pos:  4
+        bits: 3
+        type: enum class State
+        enum:
+          IDLE:
+            description: Idle State.
+            value: 0
+          RX:
+            description: Receive mode.
+            value: 1
+          TX:
+            description: Transmit mode.
+            value: 2
+          FSTXON:
+            description: Fast TX ready.
+            value: 3
+          CALIBRATE:
+            description: Frequency synthesizer calibration is running.
+            value: 4
+          SETTLING:
+            description: PLL is settling.
+            value: 5
+          RX_FIFO_ERROR:
+            description: |
+              RX FIFO has over/under-flowed.
+              Read out any useful data, then flush the FIFO with an SFRX strobe.
+            value: 6
+          TX_FIFO_ERROR:
+            description: |
+              TX FIFO has over/under-flowed.
+              Flush the FIFO with an SFTX strobe.
+            value: 6
+      RESERVED:
+        pos:  0
+        bits: 4
+
+types:
+  - enum: GPIO_CONFIG
+    values:
+      RXFIFO_THR:
+        description: |
+          Associated to the RX FIFO.
+          Asserted when the RX FIFO is filled above FIFO_CFG.FIFO_THR.
+          De-asserted when the RX FIFO is drained below (or is equal) to the same threshold.
+          This signal is also available in the MODEM_STATUS1 register.
+        value: 0
+      RXFIFO_THR_PKT:
+        description: |
+          Associated to the RX FIFO.
+          Asserted when the RX FIFO is filled above FIFO_CFG.FIFO_THR or the end of packet is reached.
+          De-asserted when the RX FIFO is empty
+        value: 1
+      TXFIFO_THR:
+        description: |
+          Associated to the TX FIFO.
+          Asserted when the TX FIFO is filled above (or is equal to) (``127 - FIFO_CFG.FIFO_THR``).
+          De-asserted when the TX FIFO is drained below the same threshold.
+          This signal is also available in the MODEM_STATUS0 register.
+        value: 2
+      TXFIFO_THR_PKT:
+        description: |
+          Associated to the TX FIFO.
+          Asserted when the TX FIFO is full.
+          De-asserted when the TX FIFO is drained below (``127 - FIFO_CFG.FIFO_THR``)
+        value: 3
+      RXFIFO_OVERFLOW:
+        description: |
+          Asserted when the RX FIFO has overflowed.
+          De-asserted when the RX FIFO is flushed (see Section 3.2.4).
+          This signal is also available in the ``MODEM_STATUS1`` register.
+        value: 4
+      TXFIFO_UNDERFLOW:
+        description: |
+          Asserted when the TX FIFO has underflowed.
+          De-asserted when the TX FIFO is flushed (see Section 3.2.4).
+          This signal is also available in the ``MODEM_STATUS0`` register.
+        value: 5
+      PKT_SYNC_RXTX:
+        description: |
+          ``RX``: Asserted when sync word has been received and de-asserted at the end of the packet.
+          Will de-assert when the optional address and/or length check fails or the RX FIFO overflows/underflows.
+          ``TX``: Asserted when sync word has been sent, and de-asserted at the end of the packet.
+          Will de-assert if the TX FIFO underflows/overflows
+        value: 6
+      CRC_OK:
+        description: |
+          Asserted simultaneously as ``PKT_CRC_OK``.
+          De-asserted when the first byte is read from the RX FIFO.
+        value: 7
+      SERIAL_CLK:
+        description: |
+          Serial clock (RX and TX mode).
+          Synchronous to the data in synchronous serial mode.
+          Data is set up on the falling edge in RX
+          and is captured on the rising edge of the serial clock in TX.
+        value: 8
+      SERIAL_RX:
+        description: |
+          Serial data (RX mode). Used for both synchronous and transparent mode.
+          Synchronous serial mode: Data is set up on the falling edge.
+          Transparent mode: No timing recovery (outputs just the hard limited baseband signal).
+        value: 9
+      RESERVED_FOR_TEST_10:
+        description: Reserved for Test
+        value: 10
+      PQT_REACHED:
+        description: |
+          Preamble Quality Reached.
+          Asserted when the quality of the preamble is above the programmed PQT value (see Section 6.8).
+          This signal is also available in the ``MODEM_STATUS1`` register.
+        value: 11
+      PQT_VALID:
+        description: |
+          Preamble quality valid.
+          Asserted when the PQT logic has received a sufficient number of symbols (see Section 6.8).
+          This signal is also available in the ``MODEM_STATUS1`` register.
+        value: 12
+      RSSI_VALID:
+        description: |
+          RSSI calculation is valid.
+        value: 13
+      RSSI_SIGNALS:
+        description: |
+          RSSI signals.
+          ``GPIO3`` : ``RSSI_UPDATE``, A pulse occurring each time the RSSI value is updated (see Figure 16).
+          ``GPIO2`` : ``RSSI_UPDATE``, A pulse occurring each time the RSSI value is updated (see Figure 16).
+          ``GPIO1`` : ``AGC_HOLD``,    AGC waits for gain settling (see Figure 16).
+          ``GPIO1`` : ``AGC_UPDATE``,  A pulse occurring each time the front end gain has been adjusted (see Figure 16).
+        value: 14
+      CLEAR_CHANNEL_ASSESSMENT:
+        description: |
+          Clear channel assessment.
+          ``GPIO3`` : ``CCA_STATUS``,   A pulse occurring each time the RSSI value is updated (see Figure 16).
+          ``GPIO2`` : ``TXONCCA_DONE``, A pulse occurring when a decision has been made as to whether the channel is busy or not.
+                                        This signal must be used as an interrupt to the MCU.
+                                        When this signal is asserted/de-asserted, TXONCCA_FAILED can be checked.
+          ``GPIO1`` : ``CCA_STATUS``,   A pulse occurring each time the RSSI value is updated (see Figure 16).
+          ``GPIO0`` : ``TXONCCA_DONE``, A pulse occurring when a decision has been made as to whether the channel is busy or not.
+                                        This signal must be used as an interrupt to the MCU.
+                                        When this signal is asserted/de-asserted, TXONCCA_FAILED can be checked.
+        value: 15
+      CARRIER_SENSE_VALID:
+        description: |
+          ``CARRIER_SENSE`` is valid (see Figure 16).
+        value: 16
+      CARRIER_SENSE:
+        description: |
+          Carrier sense.
+          High if RSSI level is above threshold (see Section 6.9.1) (see Figure 16).
+        value: 17
+      DSSS_SIGNALS:
+        description: |
+          DSSS signals for DSSS repeat mode (RX).
+          ``MODCFG_DEV_E.MODEM_MODE = 1``.
+          ``GPIO3`` : ``DSSS_CLK``,   DSSS clock (see Section 5.2.6 for more details)
+          ``GPIO2`` : ``DSSS_DATA0``, DSSS data0 (see Section 5.2.6 for more details)
+          ``GPIO1`` : ``DSSS_CLK``,   DSSS clock (see Section 5.2.6 for more details)
+          ``GPIO0`` : ``DSSS_DATA1``, DSSS data1 (see Section 5.2.6 for more details)
+        value: 18
+      PKT_CRC_OK:
+        description: |
+          Asserted in RX when ``PKT_CFG1.CRC_CFG = 1`` or ``10b`` (3) and a good packet is received.
+          This signal is always on if the radio is in TX or if the radio is in RX and ``PKT_CFG1.CRC_CFG = 0``.
+          The signal is de-asserted when RX mode is entered and ``PKT_CFG1.CRC_CFG != 0``.
+          This signal is also available in the ``LQI_VAL`` register.
+        value: 19
+      MCU_WAKEUP:
+        description: |
+          MCU wake up signal. Read ``MARC_STATUS1.MARC_STATUS_OUT`` to find the cause of the wake up event
+          (see Section 3.4.1.2 for more details).
+          This signal is also available in the ``MARC_STATUS0`` register. The signal is a pulse.
+        value: 20
+      SYNC_LOW0_HIGH1:
+        description: |
+          DualSync detect. Only valid when ``SYNC_CFG1.SYNC_MODE = 111b``.
+          When ``SYNC_EVENT`` is asserted this bit can be checked to see which sync word is found.
+          This signal is also available in the ``DEM_STATUS`` register.
+        value: 21
+      AES_COMMAND:
+        description: |
+          Indicates that an AES command is being executed.
+          ``GPIO3`` : Reserved (used for test)
+          ``GPIO2`` : Reserved (used for test)
+          ``GPIO1`` : Reserved (used for test)
+          ``GPIO0`` : ``AES_COMMAND_ACTIVE``, Indicates that an AES command is being executed
+        value: 22
+      LNA_PA_REG_PD:
+        description: |
+          Common regulator control for PA and LNA. Indicates RF operation.
+        value: 23
+      LNA_PD:
+        description: |
+          Control external LNA
+        notes: |
+          This signal is active low.
+          To control an external LNA, PA, or RX/TX switch in applications where the SLEEP state is used
+          it is therefore recommended to map this signal to GDO3 as this signal will be hardwired to 1(0)
+          in the SLEEP state.
+        value: 24
+      PA_PD:
+        description: |
+          Controls external PA.
+        notes: |
+          See LNA_PD notes.
+        value: 25
+      RX0TX1_CFG:
+        description: |
+          Indicates whether RF operation is in RX or TX (this signal is 0 in IDLE state)
+        value: 26
+      RESERVED_FOR_TEST_27:
+        description: |
+          Reserved for Test
+        value: 27
+      IMAGE_FOUND:
+        description: |
+          Image detected by image rejection calibration algorithm
+        value: 28
+      CLKEN_CFM:
+        description: |
+          Data clock for demodulator soft data (see Section 5.2.4 for more details).
+        value: 29
+      CFM_TX_DATA_CLK:
+        description: |
+          Data clock for modulator soft data (see Section 5.2.4 for more details).
+        value: 30
+      RESERVED_FOR_TEST_31:
+        description: |
+          Reserved for Test
+        value: 31
+      RESERVED_FOR_TEST_32:
+        description: |
+          Reserved for Test
+        value: 32
+      RSSI_STEP_FOUND:
+        description: |
+          RSSI step found during packet reception (after the assertion of SYNC_EVENT).
+          The RSSI step is either 10 or 16 dB (configured through ``AGC_CFG1.RSSI_STEP_THR``).
+          This signal is also available in the ``DEM_STATUS`` register.
+        value: 33
+      AES_RUN:
+        description: |
+          AES enable.
+          ``GPIO3`` : ``AES_RUN``, This signal is asserted as long as the AES module is enabled
+                        given that ``AES.AES_ABORT = 0``.
+                      This signal is also available in the ``AES`` register.
+          ``GPIO2`` : ``AES_RUN``, Same as GPIO3.
+          ``GPIO1`` : ``RSSI_STEP_EVENT``,
+                      RSSI step detected.
+                      This signal is asserted if there is an RSSI step of 3 or 6 dB during sync
+                      search or if there is an RSSI step of 10 or 16 dB during packet reception.
+                      The RSSI step is configured through ``AGC_CFG1.RSSI_STEP_THR``).
+                      The signal is a pulse
+          ``GPIO0`` : ``RSSI_STEP_EVENT``, Same as GPIO1.
+        value: 34
+      LOCK_STATUS:
+        description: |
+          Out of lock status signal.
+          Indicates out of lock when the signal goes low.
+          This signal is also available in the ``FSCAL_CTR`` register.
+          ``GPIO3`` : Reserved (used for test)
+          ``GPIO2`` : Reserved (used for test)
+          ``GPIO1`` : ``LOCK``, Out of lock status signal.
+                      Indicates out of lock when the signal goes low.
+                      This signal is also available in the ``FSCAL_CTR`` register.
+          ``GPIO0`` : ``LOCK``, Same as GPIO1.
+        value: 35
+      ANTENNA_SELECT:
+        description: |
+          Antenna diversity control.
+          Can be used to control external antenna switch.
+          If differential signal is needed, two GPIOs can be used
+          with one of them having ``IOCFGx.GPIOx_INV set to 1``.
+        value: 36
+      MARC_2PIN_STATUS_1:
+        description: |
+          Partial MARC state status. These signals are also available in the ``MARCSTATE`` register.
+          MARC_2PIN_STATUS[1]   MARC_2PIN_STATUS[0] State
+                0                     0              SETTLING
+                0                     1              TX
+                1                     0              IDLE
+                1                     1              RX
+        value: 37
+      MARC_2PIN_STATUS_0:
+        description: See MARC_2PIN_STATUS_1
+        value: 38
+      TX_RX_FIFO_OVER_UNDER_FLOW:
+        description: |
+          ``GPIO3`` : Reserved (used for test)
+          ``GPIO2`` : ``TXFIFO_OVERFLOW``, Asserted when the TX FIFO has overflowed.
+                      De-asserted when the TX FIFO is flushed (see Section 3.2.4).
+                      This signal is also available in the ``MODEM_STATUS0`` register.
+          ``GPIO1`` : Reserved (used for test)
+          ``GPIO0`` : ``RXFIFO_UNDERFLOW``, Asserted when the RX FIFO has underflowed.
+                      De-asserted when the RX FIFO is flushed (see Section 3.2.4).
+                      This signal is also available in the ``MODEM_STATUS1`` register.
+        value: 39
+      XXXX_STATUS:
+        description: |
+          ``GPIO3`` : ``MAGN_VALID``,           New CORDIC magnitude sample.
+          ``GPIO2`` : ``CHFILT_VALID``,         New channel filter sample.
+          ``GPIO1`` : ``RCC_CAL_VALID``,        RCOSC calibration has been performed at least once.
+          ``GPIO0`` : ``CHFILT_STARTUP_VALID``, Channel filter has settled.
+        value: 40
+      YYYY_STATUS:
+        description: |
+          ``GPIO3`` : ``COLLISION_FOUND``,
+                      Asserted if a new preamble is found and the RSSI has increased 10 or 16 dB during packet reception.
+                      (``MDMCFG1.COLLISION_DETECT_EN = 1``)
+                      This signal is also available in the ``DEM_STATUS`` register.
+          ``GPIO2`` : ``SYNC_EVENT``, Sync word found (pulse)
+          ``GPIO1`` : ``COLLISION_FOUND``, Sames as GPIO3
+          ``GPIO0`` : ``COLLISION_EVENT``, Preamble found during receive with an RSSI step of 10 or 16 dB (pulse).
+        value: 41
+      PA_RAMP_UP:
+        description: |
+          Asserted when ramping is started (for compliance testing).
+        value: 42
+      PKT_ERROR:
+        description: |
+          Packet framing and checking errors.
+          ``GPIO3`` : ``CRC_FAILED``,         Packet CRC error.
+          ``GPIO2`` : ``LENGTH_FAILED``,      Packet length error.
+          ``GPIO1`` : ``ADDR_FAILED``,        Packet address error.
+          ``GPIO0`` : ``UART_FRAMING_ERROR``, Packet UART framing error.
+        value: 43
+      AGC_STABLE_GAIN:
+        description: |
+          AGC has settled to a gain.
+          The AGC gain is reported stable whenever the current gain setting is equal to the previous gain setting.
+          This condition is evaluated each time a new internal RSSI estimate is computed (see Figure 16).
+        value: 44
+      AGC_UPDATE:
+        description: |
+          A pulse occurring each time the front end gain has been adjusted (see Figure 16).
+        value: 45
+      ADC_DATA_TEST:
+        description: |
+          ADC data, test purposes only.
+          ``GPIO3`` : ``ADC_CLOCK``
+          ``GPIO2`` : ``ADC_Q_DATA_SAMPLE``
+          ``GPIO1`` : ``ADC_CLOCK``
+          ``GPIO0`` : ``ADC_I_DATA_SAMPLE``
+        value: 46
+      RESERVED_47:
+        description: Reserved
+        value: 47
+      HIGHZ:
+        description: High Impedance (tri-state)
+        value: 48
+      EXT_CLOCK:
+        description: |
+          External clock (divided crystal clock).
+          The division factor is controlled through the ``ECG_CFG.EXT_CLOCK_FREQ`` register field.
+        value: 49
+      CHIP_RDYn:
+        description: Chip is not ready. Value is low when XOSC is stable.
+        value: 50
+      HW0:
+        description: HW to 0 (HW to 1 achieved with ``IOCFGx.GPIOx_INV = 1``)
+        value: 51
+      RESERVED_52:
+        description: Reserved
+        value: 52
+      RESERVED_53:
+        description: Reserved
+        value: 53
+      RESERVED_55:
+        description: Reserved
+        value: 54
+      WOR_EVENT0:
+        description: WOR_EVENT0
+        value: 55
+      WOR_EVENT1:
+        description: WOR_EVENT1
+        value: 56
+      WOR_EVENT2:
+        description: WOR_EVENT2
+        value: 57
+      RESERVED_58:
+        description: Reserved
+        value: 58
+      XOSC_STABLE:
+        description: XOSC is stable (has finished settling)
+        value: 59
+      EXT_OSC_EN:
+        description: |
+          External oscillator enable.
+          Used to control an external oscillator; e.g. a TCXO.
+          Note that this signal is only asserted if a TCXO is present.
+      RESERVED_61:
+        description: Reserved
+        value: 61
+      RESERVED_62:
+        description: Reserved
+        value: 62
+      RESERVED_63:
+        description: Reserved
+        value: 63
+
+
+registers:
+
+  IOCFG3:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      GPIO3 Pin Configuration.
+    address: 0x00
+    notes: |
+      - By setting the IOCFG3.GPIO3_CFG or IOCFG2.GPIO2_CFG = RSSI_UPDATE (14),
+        a pulse will occur on GPIO3 or GPIO2 each time the RSSI value is updated.
+      - Reset value = PKT_SYNC_RXTX (6)
+    fields: &gpio_fields
+      GPIOx_ATRAN:
+        description: |
+          Analog transfer enable.
+          ``0`` Standard digital pad.
+          ``1`` Pad in analog mode (digital GPIO input and output disabled).
+        pos:  7
+        bits: 1
+        type: bool
+      GPIOx_INV:
+        description: |
+          Invert output enable.
+          ``0`` Invert output disabled.
+          ``1`` Invert output enabled.
+        pos:  6
+        bits: 1
+        type: bool
+      GPIOx_CFG:
+        description: |
+          Output selection.
+          ``0`` Invert output disabled.
+          ``1`` Invert output enabled.
+        pos:  0
+        bits: 6
+        type: enum Config
+
+  IOCFG2:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      GPIO2 Pin Configuration
+    address: 0x01
+    notes: |
+      - By setting the IOCFG3.GPIO3_CFG or IOCFG2.GPIO2_CFG = RSSI_UPDATE (14),
+        a pulse will occur on GPIO3 or GPIO2 each time the RSSI value is updated.
+      - Reset value = ``PKT_CRC_OK`` (6)
+    fields: *gpio_fields
+
+  IOCFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      GPIO1 Pin Configuration
+    address: 0x01
+    notes: |
+      - By setting the IOCFG3.GPIO3_CFG or IOCFG2.GPIO2_CFG = RSSI_UPDATE (14),
+        a pulse will occur on GPIO3 or GPIO2 each time the RSSI value is updated.
+      - Reset value = ``HIGH-Z``
+    fields: *gpio_fields
+
+  IOCFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      GPIO1 Pin Configuration
+    address: 0x01
+    notes:
+      - By setting the IOCFG3.GPIO3_CFG or IOCFG2.GPIO2_CFG = RSSI_UPDATE (14),
+        a pulse will occur on GPIO3 or GPIO2 each time the RSSI value is updated.
+      - Reset value = ``EXT_OSC_EN`` (60)
+    fields: *gpio_fields
+
+  SYNC3:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Sync word [31:24]
+    address: 0x04
+
+  SYNC2:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Sync word [23:16]
+    address: 0x05
+
+  SYNC1:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Sync word [15:8]
+    address: 0x06
+
+  SYNC0:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Sync word [7:0]
+    address: 0x07
+
+  SYNC_CFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x08
+    fields:
+      SYNC_MODE:
+        description: |
+          Sync word configuration.
+          When SYNC_MODE = 0, all samples (noise or data) received
+          after RX mode is entered will either be put in the RX FIFO or output
+          on a GPIO configured as SERIAL_RX.
+          Note that when 4'ary modulation is used the sync word uses
+          2'ary modulation (the symbol rate is kept the same)
+        pos:  5
+        bits: 3
+        type: enum
+        enum:
+          NONE:
+            description: No sync word.
+            value: 0
+          BITS_11:
+            description: |
+              11 bits [SYNC15_8[2:0]:SYNC7_0]
+            value: 1
+          BITS_16:
+            description: |
+              16 bits [SYNC15_8: SYNC7_0]
+            value: 2
+          BITS_18:
+            description: |
+              18 bits [SYNC23_16[1:0]: SYNC15_8: SYNC7_0]
+            value: 3
+          BITS_24:
+            description: |
+              24 bits [SYNC23_16: SYNC15_8: SYNC7_0]
+            value: 4
+          BITS_32:
+            description: |
+              32 bits [SYNC31_24: SYNC23_16: SYNC15_8: SYNC7_0]
+            value: 5
+          BITS_16H:
+            description: |
+              16H bits [SYNC31_24: SYNC23_16]
+            value: 6
+          BITS_16D:
+            description: |
+              16D bits (DualSync search).
+              When this setting is used in TX mode [SYNC15_8:SYNC7_0] is transmitted
+            value: 7
+      SYNC_THR:
+        description: |
+          Soft decision sync word threshold.
+          A sync word is accepted when the calculated sync word qualifier value (``PQT_SYNC_ERR.SYNC_ERROR``)
+          is less than ``SYNC_THR/2``). A low threshold value means a strict sync word qualifier
+          (sync word must be of high quality to be accepted) while a high threshold value will accept sync word
+          of a poorer quality (increased probability of detecting ``false`` sync words).
+        pos:  0
+        bits: 5
+
+  SYNC_CFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x09
+    fields:
+      SYNC_CFG0_NOT_USED:
+        pos:  6
+        bits: 2
+      AUTO_CLEAR:
+        description: |
+          Auto clear enable
+          Auto clear of symbol rate offset estimate when ``TOC_CFG.TOC_LIMIT`` != 0`` and
+          ``MDMCFG1.CARRIER_SENSE_GATE = 1``. The symbol rate offset estimate will be cleared when
+          ``CARRIER_SENSE`` is de-asserted.
+          Auto clear of ``IQIC`` coefficient when ``IQIC.IQIC_EN = 1``.
+          The receiver image compensation coefficient is cleared when the image signal disappears.
+        type: bool
+        pos:  5
+        bits: 1
+      RX_CONFIG_LIMITATION:
+        description: |
+          Receiver configuration limitation.
+          The decimation factor is given by ``CHAN_BW.ADC_CIC_DECFACT``.
+          When this bit is set, RX filter BW must be less than 1500 kHz.
+          When ``RX_CONFIG_LIMITATION = 1`` the ``AGC_CFG1.AGC_WIN_SIZE`` should be incremented by 1
+          and the wait time between AGC gain adjustment programmed through ``AGC_CFG1.AGC_SETTLE_WAIT``
+          should be doubled.
+        type: bool
+        pos:  4
+        bits: 1
+      PQT_GATING_EN:
+        description: |
+          PQT gating enable.
+          The demodulator will not start to look for a sync word before a preamble is detected
+          (i.e. ``PQT_REACHED`` is asserted). The preamble detector must be enabled for this feature to
+          work (``PREAMBLE_CFG0.PQT_EN = 1``).
+        type: bool
+        pos:  3
+        bits: 1
+      EXT_SYNC_DETECT:
+        description: |
+          External sync detect can be used in blind mode to make the receiver change modem parameters
+          after a sync word has been detected by the MCU. GPIO2 needs to be configured as SYNC_DETECT
+          (``IOCFG2.GPIO2_CFG = HIGHZ (48)``) and the MCU should set this input when a sync word is detected.
+          This will make the receiver switch modem parameters from sync search settings to packet receive settings
+          similar to what is done in FIFO mode/normal mode.
+        type: bool
+        pos:  2
+        bits: 1
+      STRICT_SYNC_CHECK:
+        description: |
+          Strict sync word bit check.
+          This feature is useful in cases where the sync word has weak correlation properties
+          (level 3 is the strictest sync check).
+          ``0`` : Strict sync word check level 1.
+          ``1`` : Strict sync word check level 2.
+          ``2`` : Strict sync word check level 3.
+          ``3`` : Strict sync word check disabled.
+        type: enum
+        pos:  0
+        bits: 2
+
+  DEVIATION_M:
+    description: |
+      Frequency deviation (mantissa part) Maximum fdev = ~1.2 MHz
+      ``DEV_E > 0 : fdev =  fxosc / 2^22 * (256 + DEV_M) * 2^DEV_E [Hz]``
+      ``DEV_E = 0 : fdev =  fxosc / 2^21 *        DEV_M            [Hz]``
+    devices:
+      - cc11xx
+      - cc120x
+    address: 0x0A
+
+  MODCFG_DEV_E:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Modulation Format and Frequency Deviation Configuration
+    address: 0x0B
+    fields:
+      MODEM_MODE:
+        pos:  6
+        bits: 2
+        type: enum
+        enum:
+          NORMAL:
+            description: Normal mode.
+            value: 0
+          DSSS_REPEAT:
+            description: |
+              DSSS Repeat mode.
+              Requires that ``SYNC_CFG1.SYNC_MODE = 1 or 010b``.
+              TX mode: ``PKT_CFG2.PKT_FORMAT         = 0``.
+              RX mode: ``PKT_CFG2.PKT_FORMAT         = 1``.
+                       ``MDMCFG1.FIFO_EN             = 0``.
+                       ``MDMCFG0.TRANSPARENT_MODE_EN = 0``.
+              In RX mode, data is only available on GPIO by configuring ``IOCFGx.GPIOx_CFG = 18``.
+            value: 1
+          DSSS_PN:
+            value: 2
+          CARRIER_SENSE:
+            value: 3
+      MOD_FORMAT:
+        pos:  3
+        bits: 3
+        type: enum
+        enum:
+          FSK_2:
+            value: 0
+          GFSK_2:
+            value: 1
+          ASK_OOK:
+            value: 3
+          FSK_4:
+            value: 4
+          GFSK_4:
+            value: 5
+      DEV_E:
+        description: Frequency deviation (exponent part). See ``DEVIATION_M``.
+        pos:  0
+        bits: 3
+
+  DCFILT_CFG:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Digital DC Removal Configuration
+    address: 0x0C
+    fields:
+      DCFILT_FREEZE_COEFF:
+        description: |
+          ``false`` : DC filter algorithm estimates and compensates for DC error.
+          ``true``  : Manual DC compensation through registers
+                      DCFILTOFFSET_I1, DCFILTOFFSET_I0, DCFILTOFFSET_Q1, and DCFILTOFFSET_Q0.
+        pos:  6
+        bits: 1
+        type: bool
+      DCFILT_BW_SETTLE:
+        description: |
+          Settling period of high pass DC filter after AGC adjustment.
+          Sample Rate = Fxosc / Decimation Factor [Hz]
+          The decimation factor is 12, 24, or 48, depending on the ``CHAN_BW.ADC_CIC_DECFACT`` setting.
+          The number of samples = 8 * 2 ^ DCFILT_BW_SETTLE, max 128 samples.
+        pos:  3
+        bits: 3
+      DCFILT_BW:
+        description: |
+          Cut-off frequency (fCut-Off ) of high pass DC filter.
+          Fc = Cut-off frequency of DC HPF.
+          DCFILT_BW [0:3]:
+          Fc = Fxosc / (Decimation Factor * 2 ^ (DCFILT_BW + 3)) [Hz]
+          DCFILT_BW [6:7]:
+          Fc = Fxosc / (Decimation Factor * 2 ^ (DCFILT_BW)) [Hz]
+          The decimation factor is 12, 24, or 48, depending on the ``CHAN_BW.ADC_CIC_DECFACT`` setting.
+
+  PREAMBLE_CFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Preamble Configuration Reg. 1
+    address: 0x0D
+    fields:
+      NUM_PREAMBLE:
+        description : Sets the minimum number of preamble bits to be transmitted.
+        pos:  2
+        bits: 4
+        type: enum
+        enum:
+          NO_PREAMBLE:
+            value: 0
+          BITS_4:
+            value: 1
+          BITS_8:
+            value: 2
+          BITS_12:
+            value: 3
+          BITS_16:
+            value: 4
+          BITS_24:
+            value: 5
+          BITS_32:
+            value: 6
+          BITS_40:
+            value: 7
+          BITS_48:
+            value: 8
+          BITS_56:
+            value: 9
+          BITS_64:
+            value: 10
+          BITS_96:
+            value: 11
+          BITS_192:
+            value: 12
+          BITS_240:
+            value: 13
+      PREAMBLE_WORD:
+        description: |
+          Preamble byte configuration.
+          ``PREAMBLE_WORD`` determines how a preamble byte looks like.
+          Note that when 4'ary modulation is used the preamble uses 2'are modulation
+          (the symbol rate is kept the same).
+        pos:  0
+        bits: 2
+        type: enum
+        enum:
+          PREAMBLE_0xAA:
+            value: 0
+          PREAMBLE_0x55:
+            value: 1
+          PREAMBLE_0x33:
+            value: 2
+          PREAMBLE_0xCC:
+            value: 3
+
+  PREAMBLE_CFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Preamble Configuration Reg. 0
+    address: 0x0E
+    fields:
+      PQT_ENABLE:
+        description: Preamble detection enable.
+        pos:  7
+        bits: 1
+        reset: 0x01
+        type:  bool
+      PQT_VALID_TIMEOUT:
+        description: |
+          PQT start-up timer.
+          ``PQT_VALID_TIMEOUT`` sets the number of symbols that must be received before ``PQT_VALID`` is asserted.
+        pos:  4
+        bits: 3
+        reset: 0x05
+        type: enum
+        enum:
+          SYMBOLS_11:
+            value: 0
+          SYMBOLS_12:
+            value: 1
+          SYMBOLS_13:
+            value: 2
+          SYMBOLS_15:
+            value: 3
+          SYMBOLS_16:
+            value: 4
+          SYMBOLS_17:
+            value: 5
+          SYMBOLS_24:
+            value: 6
+          SYMBOLS_32:
+            value: 7
+      PQT:
+        description: |
+          Soft decision PQT.
+          A preamble is detected when the calculated preamble qualifier value
+          (``PQT_SYNC_ERR.PQT_ERROR``) is less than PQT.
+          A low threshold value means a strict preamble qualifier
+          (preamble must be of high quality to be accepted),
+          while a high threshold value will accept preamble of a poorer quality
+          (increased probability of detecting a ``false`` preamble).
+        pos:  0
+        bits: 4
+        reset: 0x0A
+        type: uint
+
+  IQIC:
+    description:  Digital Image Channel Compensation Configuration.
+    devices:
+      - cc11xx
+      - cc120x
+    address: 0x0F
+    fields:
+      IQIC_EN:
+        description: |
+          IQ image compensation enable.
+          When this bit is set the following must be true:
+          ``fIF > RX filter BW``
+          (see ``IF_MIX_CFGCMIX_CFG`` for how to program fIF).
+        pos:  7
+        bits: 1
+        reset: 0x01
+        type: bool
+      IQIC_UPDATE_COEFF_EN:
+        description: |
+          IQIC update coefficients enable.
+          IQIE_I1, IQIE_I0, IQIE_Q1, and IQIE_Q0 registers are updated.
+        pos:  6
+        bits: 1
+        reset: 0x01
+        type: bool
+      IQIC_BLEN_SETTLE:
+        description: |
+          IQIC block length when settling.
+          The IQIC module will do a coarse estimation of IQ imbalance coefficients
+          during settling mode.
+          Long block length increases settling time and improves image rejection.
+        pos:  4
+        bits: 2
+        reset: 0x00
+        type: enum
+        enum: &iqic_blen
+          SAMPLES_8:
+            value: 8
+          SAMPLES_32:
+            value: 1
+          SAMPLES_128:
+            value: 2
+          SAMPLES_256:
+            value: 3
+      IQIC_BLEN:
+        description: |
+          IQIC block length.
+          Long block length increases settling time and improves image rejection.
+        pos:  3
+        bits: 2
+        reset: 0x01
+        type: enum
+        enum: *iqic_blen
+      IQIC_IMGCH_LEVEL_THR:
+        description: |
+          IQIC image channel level threshold.
+          Image rejection will be activated when image carrier is present.
+          The IQIC image channel level threshold is an image carrier detector.
+          High threshold imply that image carrier must be high to enable IQIC compensation module
+        pos:  0
+        bits: 2
+        reset: 0x01
+        type: enum
+        enum:
+          GT_256:
+            value: 0
+          GT_512:
+            value: 1
+          GT_1024:
+            value: 2
+          GT_2048:
+            value: 3
+
+  CHAN_BW:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x10
+
+  MDMCFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x11
+
+  MDMCFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x12
+
+  SYMBOL_RATE2:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x13
+
+  SYMBOL_RATE1:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x14
+
+  SYMBOL_RATE0:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x15
+
+  AGC_REF:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x16
+
+  AGC_CS_THR:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x17
+
+  AGC_GAIN_ADJUST:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x18
+
+  AGC_CFG3:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x19
+
+  AGC_CFG2:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x1A
+
+  AGC_CFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x1B
+
+  AGC_CFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x1C
+
+  FIFO_CFG:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x1D
+
+  DEV_ADDR:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x1E
+
+  SETTLING_CFG:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x1F
+
+  FS_CFG:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x20
+
+  WOR_CFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x21
+
+  WOR_CFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x22
+
+  WOR_EVENT0_MSB:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x23
+
+  WOR_EVENT0_LSB:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x24
+
+  RXDCM_TIME:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x25
+
+  PKT_CFG2:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x26
+
+  PKT_CFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x27
+
+  PKT_CFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x28
+
+  RFEND_CFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x29
+
+  RFEND_CFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x2A
+
+  PA_CFG1:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x2B
+
+  PA_CFG0:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x2C
+
+  ASK_CFG:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x2D
+
+  PKT_LEN:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x2E
+
+  EXTENDED_ADDRESS:
+    devices:
+      - cc11xx
+      - cc120x
+    description:
+    address: 0x2F
+
+# Command Strobes may be viewed as single byte instructions to CC120X.
+# By addressing a command strobe register, internal sequences will be started.
+# These commands are used to enable receive and transmit mode, enter SLEEP mode,
+# disable the crystal oscillator, etc.
+# The command strobe registers are accessed by transferring a single header byte
+# (no data is transferred). i.e. only the R/W ̄ bit, the burst access bit (set to 0),
+# and the six address bits (in the range 0x30 through 0x3D) are written.
+# The status byte is available on the SO pin when a command strobe is being sent.
+command_strobes:
+
+  SRES:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Reset chip.
+    address: 0x30
+
+  SFSTXON:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Enable and calibrate frequency synthesizer (if ``SETTLING_CFG.FS_AUTOCAL = 1``).
+      If in RX and ``PKT_CFG2.CCA_MODE != 0``: Go to a wait state where only the
+      synthesizer is running (for quick RX/TX turnaround).
+    address: 0x31
+
+  SXOFF:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Enter XOFF state when CSn is de-asserted.
+    address: 0x32
+
+  SCAL:
+    devices:
+        - cc11xx
+        - cc120x
+    description: |
+      Calibrate frequency synthesizer and turn it off.
+      SCAL can be strobed from IDLE mode without setting manual calibration mode
+      (``SETTLING_CFG.FS_AUTOCAL = 0``)
+    address: 0x33
+
+  SRX:
+    devices:
+        - cc11xx
+        - cc120x
+    description: |
+      Enable RX.
+      Perform calibration first if coming from IDLE and ``SETTLING_CFG.FS_AUTOCAL = 1``.
+    address: 0x34
+
+  STX:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      In IDLE state: Enable TX. Perform calibration first if ``SETTLING_CFG.FS_AUTOCAL = 1``.
+      If in RX state and ``PKT_CFG2.CCA_MODE != 0``: Only go to TX if channel is clear.
+    address: 0x35
+
+  SIDLE:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Exit RX/TX, turn off frequency synthesizer and exit eWOR mode if applicable
+    address: 0x36
+
+  SAFC:
+    devices:
+      - cc11xx
+      - cc120x
+    description: Automatic Frequency Compensation
+    address: 0x37
+
+  SWOR:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Start automatic RX polling sequence (eWOR) as described in Section 9.6 if ``WOR_CFG0.RC_PD = 0``.
+    address: 0x38
+
+  SPWD:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Enter SLEEP mode when CSn is de-asserted.
+    address: 0x39
+
+  SFRX:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Flush the RX FIFO. Only issue SFRX in IDLE or RX_FIFO_ERR states.
+    address: 0x3A
+
+  SFTX:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Flush the RX FIFO. Only issue SFRX in IDLE or RX_FIFO_ERR states.
+    address: 0x3B
+
+  SWORRST:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      Reset the eWOR timer to the Event1 value.
+    address: 0x3C
+
+  SNOP:
+    devices:
+      - cc11xx
+      - cc120x
+    description: |
+      No operation. May be used to get access to the chip status byte
+    address: 0x3D
