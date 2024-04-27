@@ -444,6 +444,7 @@ registers:
     description: |
       GPIO3 Pin Configuration.
     address: 0x00
+    reset_value: 0x06
     notes: |
       - By setting the IOCFG3.GPIO3_CFG or IOCFG2.GPIO2_CFG = RSSI_UPDATE (14),
         a pulse will occur on GPIO3 or GPIO2 each time the RSSI value is updated.
@@ -481,6 +482,7 @@ registers:
     description: |
       GPIO2 Pin Configuration
     address: 0x01
+    reset_value: 0x07
     notes: |
       - By setting the IOCFG3.GPIO3_CFG or IOCFG2.GPIO2_CFG = RSSI_UPDATE (14),
         a pulse will occur on GPIO3 or GPIO2 each time the RSSI value is updated.
@@ -494,6 +496,7 @@ registers:
     description: |
       GPIO1 Pin Configuration
     address: 0x01
+    reset_value: 0x30
     notes: |
       - By setting the IOCFG3.GPIO3_CFG or IOCFG2.GPIO2_CFG = RSSI_UPDATE (14),
         a pulse will occur on GPIO3 or GPIO2 each time the RSSI value is updated.
@@ -507,6 +510,7 @@ registers:
     description: |
       GPIO1 Pin Configuration
     address: 0x01
+    reset_value: 0x3C
     notes:
       - By setting the IOCFG3.GPIO3_CFG or IOCFG2.GPIO2_CFG = RSSI_UPDATE (14),
         a pulse will occur on GPIO3 or GPIO2 each time the RSSI value is updated.
@@ -519,6 +523,7 @@ registers:
       - cc120x
     description: Sync word [31:24]
     address: 0x04
+    reset_value: 0x93
 
   SYNC2:
     devices:
@@ -526,6 +531,7 @@ registers:
       - cc120x
     description: Sync word [23:16]
     address: 0x05
+    reset_value: 0x0B
 
   SYNC1:
     devices:
@@ -533,6 +539,7 @@ registers:
       - cc120x
     description: Sync word [15:8]
     address: 0x06
+    reset_value: 0x51
 
   SYNC0:
     devices:
@@ -540,6 +547,7 @@ registers:
       - cc120x
     description: Sync word [7:0]
     address: 0x07
+    reset_value: 0xDE
 
   SYNC_CFG1:
     devices:
@@ -547,6 +555,7 @@ registers:
       - cc120x
     description:
     address: 0x08
+    reset_value: 0xAA
     fields:
       SYNC_MODE:
         description: |
@@ -608,6 +617,7 @@ registers:
       - cc120x
     description:
     address: 0x09
+    reset_value: 0x03
     fields:
       SYNC_CFG0_NOT_USED:
         pos:  6
@@ -675,6 +685,7 @@ registers:
       - cc11xx
       - cc120x
     address: 0x0A
+    reset_value: 0x06
 
   MODCFG_DEV_E:
     devices:
@@ -682,6 +693,7 @@ registers:
       - cc120x
     description: Modulation Format and Frequency Deviation Configuration
     address: 0x0B
+    reset_value: 0x03
     fields:
       MODEM_MODE:
         pos:  6
@@ -731,6 +743,7 @@ registers:
       - cc120x
     description: Digital DC Removal Configuration
     address: 0x0C
+    reset_value: 0x4C   # 0 1 001 100 => 0100 1100
     fields:
       DCFILT_FREEZE_COEFF:
         description: |
@@ -764,6 +777,7 @@ registers:
       - cc120x
     description: Preamble Configuration Reg. 1
     address: 0x0D
+    reset_value: 0x28   # 00 101 000 => 0010 1000
     fields:
       NUM_PREAMBLE:
         description : Sets the minimum number of preamble bits to be transmitted.
@@ -824,6 +838,7 @@ registers:
       - cc120x
     description: Preamble Configuration Reg. 0
     address: 0x0E
+    reset_value: 0xDA   # 1 101 1010 => 1101 1010
     fields:
       PQT_ENABLE:
         description: Preamble detection enable.
@@ -876,6 +891,7 @@ registers:
       - cc11xx
       - cc120x
     address: 0x0F
+    reset_value: 0xC4   # 1 1 00 01 00 => 1100 0100
     fields:
       IQIC_EN:
         description: |
