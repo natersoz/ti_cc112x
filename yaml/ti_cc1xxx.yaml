@@ -423,6 +423,7 @@ types:
           External oscillator enable.
           Used to control an external oscillator; e.g. a TCXO.
           Note that this signal is only asserted if a TCXO is present.
+        value: 60
       RESERVED_61:
         description: Reserved
         value: 61
@@ -471,7 +472,7 @@ registers:
           ``1`` Invert output enabled.
         pos:  0
         bits: 6
-        type: enum Config
+        type: enum GPIO_CONFIG
 
   IOCFG2:
     devices:
