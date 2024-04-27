@@ -19,7 +19,6 @@ def print_comment_multi_line(comment, indent):
     """
     Print a multiple line comment.
     """
-    line_count = comment.count(os.linesep)
     comment_lines = comment.split(os.linesep)
     print(" " * indent, C_MULTI_LINE_COMMENT_PREFIX)
     for line in comment_lines:
@@ -48,12 +47,16 @@ def print_enums(types_list):
             {'GPIO_CONFIG',
                 'values':
                 {
-                        'ADC_DATA_TEST': {'description': 'ADC data, test purposes only.\n',
-                                        'value': 46},
-                        'ANTENNA_SELECT': {'description': 'Antenna diversity control.\n',
-                                        'value': 36},
-                        ...
-                    }
+                    'ADC_DATA_TEST': {
+                        'description': 'ADC data, test purposes only.\n',
+                        'value': 46
+                    },
+                    'ANTENNA_SELECT': {
+                        'description': 'Antenna diversity control.\n',
+                        'value': 36
+                    },
+                    ...
+                }
             },
         ...
         },
