@@ -963,8 +963,31 @@ registers:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: Channel Filter Configuration.
     address: 0x10
+    reset_value: 0x94   # 10 010100 => 1001 0100
+    fields:
+      ADC_CIC_DECFACT:
+        description: |
+          Set the first decimation filter and programs the RX filter bandwidth.
+          ``0``: Decimation factor 12
+          ``1``: Decimation factor 24
+          ``2``: Decimation factor 48
+          ``3``: Reserved
+        pos: 6
+        bits: 2
+      BB_CIC_DECFACT:
+        pos: 0
+        bits: 5
+        description: |
+          Configures the RX filter BW by changing decimation factor in the second decimation filter.
+          Device    ADC_CIC_DECFACT BB_CIC_DECFACT  RX Filter BW Range [kHz]
+          CC1200    12              1-44            37.9 - 1666.7
+          CC1200    24              1-44            18.9 - 833.3
+          CC1200    48              1-44             9.5 - 416.7
+          CC1201    12              1-33            50.5 - 1666.7
+          CC1201    24              1-16            52.1 - 833.3
+          CC1201    48              1- 8            52.1 - 416.7
 
   MDMCFG1:
     devices:
@@ -972,6 +995,77 @@ registers:
       - cc120x
     description:
     address: 0x11
+    reset_value: 0x46   # 0100 0110
+    fields:
+      CARRIER_SENSE_GATE:
+        description: |
+          When ``CARRIER_SENSE_GATE`` is 1, the demodulator will not start to look for
+          a sync word before ``CARRIER_SENSE`` is asserted.
+          ``0``: Search for sync word regardless of CS
+          ``1``: Do not start sync search before CARRIER_SENSE is asserted
+        pos: 7
+        bits: 1
+        type: bool
+      FIFO_EN:
+        description: |
+          FIFO enable.
+          Specifies if data to/from modem will be passed through the FIFOs or directly to the serial pin.
+          ``0``: Data in/out through the serial pin(s) (the FIFOs are bypassed).
+          ``1``: Data in/out through the FIFOs.
+        pos: 6
+        bits: 1
+        type: bool
+      MANCHESTER_EN:
+        description: |
+          Manchester mode enable.
+          Manchester encoding/decoding is only applicable to payload data including optional CRC.
+          Manchester encoding/decoding is not supported for 4-(G)FSK
+          ``0``: NRZ
+          ``1`` Manchester encoding/decoding
+        pos: 5
+        bits: 1
+        type: bool
+      INVERT_DATA_EN:
+        description: |
+          Invert data enable.
+          Invert payload data stream in RX and TX
+          (only applicable to payload data including optional CRC).
+        pos: 4
+        bits: 1
+        type: bool
+      COLLISION_DETECT_EN:
+        description: |
+          Collision detect enable.
+          After a sync word is detected (SYNC_EVENT asserted), the receiver will always receive a packet.
+          If collision detection is enabled, the receiver will continue to search for preamble.
+          If a new preamble is found (PQT_REACHED asserted) and the RSSI has increased 10 or 16 dB
+          during packet reception (depending on AGC_CFG1.RSSI_STEP_THR) a collision is detected and
+          the COLLISION_FOUND flag will be asserted.
+        pos: 3
+        bits: 1
+        type: bool
+      DVGA_GAIN:
+        description: |
+          Fixed DVGA gain configuration.
+          The DVGA configuration has impact on the RSSI offset
+          ``0``:   0 dB DVGA (preferred setting for RX filter bandwidth < 100 kHz)
+          ``1``: -18 dB DVGA (preferred setting for RX filter bandwidth ≥ 100 kHz)
+          ``2``: Reserved
+          ``3``: Reserved
+        pos: 1
+        bits: 2
+      SINGLE_ADC_EN:
+        description: |
+          Configure the number of active receive channels.
+          If this bit is set the power consumption will be reduced but the sensitivity
+          level will be reduced by ~3 dB. Image rejection will not work.
+          ``0``: Rx I,Q channels.
+          ``1``: Rx I   channel only.
+          ``2``: Reserved
+          ``3``: Reserved
+        pos: 0
+        bits: 1
+        type: bool
 
   MDMCFG0:
     devices:
@@ -979,6 +1073,62 @@ registers:
       - cc120x
     description:
     address: 0x12
+    reset_value: 0x0D   # 0 0 00 1 1 01 => 0000 1101
+    fields:
+      MDMCFG0_RESERVED7:
+        description: For test purposes only, use values from SmartRF Studio.
+        pos: 7
+        bits: 1
+        type: bool
+      TRANSPARENT_MODE_EN:
+        description: Transparent mode enable.
+        pos: 6
+        bits: 1
+        type: bool
+      TRANSPARENT_INTFACT:
+        description: |
+          Transparent signal interpolation factor.
+          The sample rate gives the jitter of the samples and the sample rate is given by:
+            Sample Rate = (fxosc * Interpolation Factor) / (Decimation Factor * CHAN_BW.BB_CIC_DECFACT) [Hz]
+          The decimation factor is given by ``CHAN_BW.ADC_CIC_DECFACT``,
+          while the interpolation factor is given below:
+            ``0``: 1x transparent signal interpolated one time before output (reset)
+            ``1``: 2x transparent signal interpolated two times before output
+            ``2``: 4x transparent signal interpolated four times before output
+            ``3``: Reserved
+        pos: 4
+        bits: 2
+      DATA_FILTER_EN:
+        description: |
+          Transparent data filter and extended data filter enable.
+          Enabling transparent data filter and/or extended data filter might improve sensitivity.
+          When ``TRANSPARENT_MODE_EN = 0`` this bit should only be set when the RX filter
+          bandwidth/symbol rate > 10 and ``TOC_CFG.TOC_LIMIT`` = 0.
+          The table below shows the status of the transparent data filter and the extended data filter
+          for all combinations of ``TRANSPARENT_MODE_EN`` (MSB) and ``DATA_FILTER_EN`` (LSB):
+          ``0``: Transparent data filter disabled and extended data filter disabled.
+          ``1``: Transparent data filter disabled and extended data filter enabled.
+          ``2``: Transparent data filter disabled and extended data filter disabled.
+          ``3``: Transparent data filter enabled  and extended data filter disabled.
+        pos: 3
+        bits: 1
+        type: bool
+      VITERBI_EN:
+        description: |
+          Viterbi detection enable.
+          Enabling Viterbi detection improves the sensitivity.
+          The latency from the antenna to the signal is available in the RXFIFO or
+          on the GPIO is increased by 5 bits for 2-ary modulation formats
+          and 10 bits for 4-ary modulation formats.
+          Minimum packet length = 2 bytes when Viterbi detection and 4-(G)FSK is enabled
+        pos: 2
+        bits: 1
+        type: bool
+      MDMCFG0_RESERVED1_0:
+        description: For test purposes only, use values from SmartRF Studio.
+        pos: 0
+        bits: 1
+        type: bool
 
   SYMBOL_RATE2:
     devices:
@@ -986,34 +1136,76 @@ registers:
       - cc120x
     description:
     address: 0x13
+    reset_value: 0x43
+    fields:
+      SRATE_E:
+        description: |
+          ``SRATE_E > 0`` : Rsymbol = fxosc * (2^20 + SRATE_M) * 2^SRATE_E / 2^39 [ksps]
+          ``SRATE_E = 0`` : Rsymbol = fxosc *         SRATE_M              / 2^38 [ksps]
+
+          Modulation format / data encoding         Data rate/symbol rate ratio
+          2-FSK                                     1
+          4-FSK                                     2
+          Manchester                                1/2
+          DSSS                                      1/spreading_factor
+          FEC                                       1/2
+        pos: 4
+        bits: 3
+      SRATE_M_19_16:
+        description: Symbol rate (mantissa part [19:16]). See ``SRATE_E``.
+        pos: 0
+        bits: 3
 
   SYMBOL_RATE1:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: |
+      Symbol rate (mantissa part [15:8]). See ``SYMBOL_RATE2``.
     address: 0x14
+    reset_value: 0xA9
 
   SYMBOL_RATE0:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: |
+      Symbol rate (mantissa part [7:0]). See ``SYMBOL_RATE2``.
     address: 0x15
+    reset_value: 0x2A
 
   AGC_REF:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: |
+      AGC Reference Level Configuration
+      The AGC reference level must be higher than the minimum SNR to the demodulator.
+      The AGC reduces the analog front end gain when the magnitude output from
+      channel filter > AGC reference level.
+      An optimum AGC reference level is given by several conditions,
+      but a rule of thumb is to use the formula:
+        ``AGC_REFERENCE = 10 * log10 (RX Filter BW) - 92 - RSSI Offset``
+      RX filter BW              AGC_REFERENCE
+        10 kHz                  0x2F (MDMCFG1.DVGA_GAIN = 0, RSSI offset = -99 dB)
+       100 kHz                  0x27 (MDMCFG1.DVGA_GAIN = 1, RSSI offset = -81 dB)
+       200 kHz                  0x2D (MDMCFG1.DVGA_GAIN = 1, RSSI offset = -81 dB)
+       500 kHz                  0x2F (MDMCFG1.DVGA_GAIN = 1, RSSI offset = -81 dB)
+      1600 kHz                  0x33 (MDMCFG1.DVGA_GAIN = 1, RSSI offset = -81 dB)
+      For zero-IF configuration, AGC hysteresis > 3 dB, or modem format which needs
+      SNR > 15 dB a higher, AGC reference value is needed.
     address: 0x16
+    reset_value: 0x36
 
   AGC_CS_THR:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: |
+      AGC carrier sense threshold.
+      Two's complement number with 1 dB resolution.
     address: 0x17
+    reset_value: 0x00
 
   AGC_GAIN_ADJUST:
     devices:
@@ -1021,6 +1213,7 @@ registers:
       - cc120x
     description:
     address: 0x18
+    reset_value: 0x00
 
   AGC_CFG3:
     devices:
