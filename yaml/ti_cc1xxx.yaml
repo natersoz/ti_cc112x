@@ -1211,7 +1211,11 @@ registers:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: |
+      AGC gain adjustment.
+      This register is used to adjust RSSI[11:0] to the actual carrier
+      input signal level to compensate for interpolation gains
+      (two's complement with 1 dB resolution).
     address: 0x18
     reset_value: 0x00
 
@@ -1219,43 +1223,208 @@ registers:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: Automatic Gain Control Configuration Reg. 3
     address: 0x19
+    reset_value: 0xD1   # 101 10001 => 1011 0001
+    fields:
+      AGC_SYNC_BEHAVIOUR:
+        description: |
+          AGC behavior after sync word detection.
+          ``0``: No AGC gain freeze. Keep computing/updating RSSI.
+          ``1``: AGC gain freeze. Keep computing/updating RSSI.
+          ``2``: No AGC gain freeze. Keep computing/updating RSSI (AGC slow mode enabled).
+          ``3``: Freeze both AGC gain and RSSI.
+          ``4``: No AGC gain freeze. Keep computing/updating RSSI.
+          ``5``: Freeze both AGC gain and RSSI.
+          ``6``: No AGC gain freeze. Keep computing/updating RSSI (AGC slow mode enabled).
+          ``7``: Freeze both AGC gain and RSSI.
+        pos: 5
+        bits: 3
+      AGC_MIN_GAIN:
+        description: |
+          AGC minimum gain.
+          Limits the AGC minimum gain compared to the preset gain table range.
+          ``AGC_MIN_GAIN`` can have a value in the range:
+            ``0 to 17`` when ``AGC_CFG2.FE_PERFORMANCE_MODE = 0 or 1``
+            ``0 to 13`` when ``AGC_CFG2.FE_PERFORMANCE_MODE = 2``
+            ``0 to  7`` when ``AGC_CFG2.FE_PERFORMANCE_MODE = 3``
+        pos: 0
+        bits: 5
 
   AGC_CFG2:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: Automatic Gain Control Configuration Reg. 2
     address: 0x1A
+    reset_value: 0x20
+    fields:
+      START_PREVIOUS_GAIN_EN:
+        description: |
+          ``0``: Receiver starts with maximum gain value
+          ``1``: Receiver starts from previous gain value
+        pos: 7
+        bits: 1
+        type: bool
+      FE_PERFORMANCE_MODE:
+        description: |
+          Controls which gain tables to be applied.
+          ``0``: Optimized linearity mode.
+          ``1``: Normal operation mode.
+          ``2``: Low power mode with reduced gain range.
+          ``3``: Zero-IF mode.
+        pos: 5
+        bits: 2
+      AGC_MAX_GAIN:
+        description: |
+          AGC maximum gain.
+          Limits the AGC maximum gain compared to the preset gain table range.
+          ``AGC_MAX_GAIN`` can have a value in the range:
+          ``0 to 17 when AGC_CFG2.FE_PERFORMANCE_MODE = 0 or 1``
+          ``0 to 13 when AGC_CFG2.FE_PERFORMANCE_MODE = 2``
+          ``0 to  7 when AGC_CFG2.FE_PERFORMANCE_MODE = 3``
 
   AGC_CFG1:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: Automatic Gain Control Configuration Reg. 1
     address: 0x1B
-
+    reset_value: 0x52     # 0 1 010 010 => 0101 0010
+    fields:
+      AGC_CFG1_NOT_USED:
+        pos: 7
+        bits: 1
+      RSSI_STEP_THR:
+        description: |
+          AGC has a built in function to signal if there has been a step in the RSSI value.
+          During sync search the difference between the current and the previous RSSI value
+          is compared against the RSSI step (3 or 6 dB), while during packet reception,
+          the difference between the current value and the value at sync found is compared
+          against 10 or 16 dB.
+          ``0``: RSSI step is 3 dB during sync search RSSI step is 10 dB during packet reception.
+          ``1``: RSSI step is 6 dB during sync search RSSI step is 16 dB during packet reception.
+        pos: 6
+        bits: 1
+      AGC_WIN_SIZE:
+        description: |
+          AGC integration window size for each value.
+          Samples refer to the RX filter sampling frequency,
+          which is programmed to be 4 times the desired RX filter BW.
+            ``0``:   8 samples
+            ``1``:  16 samples
+            ``2``:  32 samples
+            ``3``:  64 samples
+            ``4``: 128 samples
+            ``5``: 256 samples
+            ``6``: Reserved
+            ``7``: Reserved
+        pos: 3
+        bits: 3
+      AGC_SETTLE_WAIT:
+        pos: 0
+        bits: 3
+        description: |
+          Sets the wait time between AGC gain adjustments.
+          ``0``:  24 samples
+          ``1``:  32 samples
+          ``2``:  40 samples
+          ``3``:  48 samples
+          ``4``:  64 samples
+          ``5``:  80 samples
+          ``6``:  96 samples
+          ``7``: 127 samples
   AGC_CFG0:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: Automatic Gain Control Configuration Reg. 0
     address: 0x1C
+    reset_value: 0xC3     # 11 00 00 11
+    fields:
+      AGC_HYST_LEVEL:
+        description: |
+          AGC hysteresis level.
+          The difference between the desired signal level and the actual signal
+          level must be larger than AGC hysteresis level before the AGC changes
+          the front end gain.
+            ``0``:  2 dB
+            ``1``:  4 dB
+            ``2``:  7 dB
+            ``3``: 10 dB
+        pos: 6
+        bits: 2
+      AGC_SLEWRATE_LIMIT:
+        description: |
+          AGC slew rate limit. Limits the maximum front end gain adjustment.
+          ``0``: 60 dB
+          ``1``: 30 dB
+          ``2``: 18 dB
+          ``3``:  9 dB
+      RSSI_VALID_CNT:
+        description: |
+          Gives the number of new input samples to the moving average filter (internal RSSI estimates)
+          that are required before the next update of the RSSI value.
+          The ``RSSI_VALID`` signal will be asserted from the first RSSI update.
+          ``RSSI_VALID`` is available on a GPIO or can be read from the ``RSSI0`` register.
+          ``0``: 1
+          ``1``: 2
+          ``2``: 5
+          ``3``: 9
+      AGC_ASK_DECAY:
+        description: |
+          The OOK/ASK receiver uses a max peak magnitude (logic 1) tracker and low peak magnitude
+          (logic 0) tracker to estimate ASK_THRESHOLD (decision level) as the average of the max
+          and min value. The max peak magnitude value is also used by the AGC to set the gain.
+          AGC_ASK_DECAY controls the max peak magnitude decay steps in OOK/ASK mode and defines
+          the number of samples required for the max peak level to be reduced to 10% when receiving
+          logic 0’s after receiving a logic 1.
+
+            SampleRate = fxosc * InterpolationFactor / (DecimationFactor *  ``CHAN_BW.BB_CIC_DECFACT``) [Hz]
+
+          The decimation factor is given by ``CHAN_BW.ADC_CIC_DECFACT`` and the
+          interpolation factor is given by ``SYNC_CFG0.RX_CONFIG_LIMITATION`` as follows:
+          ``RX_CONFIG_LIMITATION = 0: InterpolationFactor = 2``
+          ``RX_CONFIG_LIMITATION = 1: InterpolationFactor = 4``
+
+          ``0`` 1200 samples
+          ``1`` 2400 samples
+          ``2`` 4700 samples
+          ``3`` 9500 samples
 
   FIFO_CFG:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: FIFO Configuration
     address: 0x1D
+    reset_value: 0x80
+    fields:
+      CRC_AUTOFLUSH:
+        description: |
+          Automatically flushes the last packet received in the RX FIFO if a CRC error occurred.
+          If this bit has been turned off and should be turned on again,
+          an ``SFRX`` strobe must first be issued.
+        pos: 7
+        bits: 1
+        type: bool
+      FIFO_THR:
+        description: |
+          Threshold value for the RX and TX FIFO.
+          The threshold value is coded in opposite directions for the two FIFOs to give equal
+          margin to the overflow and underflow conditions when the threshold is reached.
+          FIFO_THR =   0 means that there are 127 bytes in the TX FIFO and 1 byte in the RX FIFO.
+          FIFO_THR = 127 means that there are 0 bytes in the TX FIFO and 128 bytes in the RX FIFO.
+        pos: 0
+        bits: 7
 
   DEV_ADDR:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: Address used for packet filtering in RX
     address: 0x1E
+    reset_value: 0x00
 
   SETTLING_CFG:
     devices:
@@ -1263,20 +1432,109 @@ registers:
       - cc120x
     description:
     address: 0x1F
+    reset_value: 0x0B   # 000 01 01 1 => 0000  1011
+    fields:
+      SETTLING_CFG_NOT_USED:
+        pos: 5
+        bits: 3
+      FS_AUTOCAL:
+        description: |
+          Auto calibration is performed:
+          ``0``: Never (manually calibrate using SCAL strobe)
+          ``1``: When going from IDLE to RX or TX (or FSTXON)
+          ``2``: When going from RX or TX back to IDLE automatically
+          ``3``: Every 4th time when going from RX or TX to IDLE automatically
+        pos: 3
+        bits: 2
+      LOCK_TIME:
+        description: |
+          Sets the time for the frequency synthesizer to settle to lock state.
+          The table shows settling after calibration and settling when switching
+          between TX and RX. Use values from SmartRF Studio
+          ``0:  50/20 us``
+          ``1:  75/30 us``
+          ``2: 100/40 us``
+          ``3: 150/60 us``
+        pos: 1
+        bits: 2
+      FSREG_TIME:
+        description: |
+          Frequency synthesizer regulator settling time. Use values from SmartRF Studio
+          ``0: 30 μs``
+          ``1: 60 μs``
+        pos: 0
+        bits: 1
 
   FS_CFG:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: Frequency Synthesizer Configuration
     address: 0x20
+    reset_value: 0x02
+    fields:
+      FS_CFG_NOT_USED:
+        pos: 5
+        bits: 3
+      FS_LOCK_EN:
+        description: Out of lock detector enable.
+        pos: 4
+        bits: 1
+        type: bool
+      FSD_BANDSELECT:
+        description: |
+          Band select setting for LO divider.
+          `` 2: 820.0 - 960.0 MHz band, LO divider =  4``
+          `` 4: 820.0 - 960.0 MHz band, LO divider =  8``
+          `` 6: 820.0 - 960.0 MHz band, LO divider = 12``
+          `` 8: 820.0 - 960.0 MHz band, LO divider = 16``
+          ``10: 820.0 - 960.0 MHz band, LO divider = 20``
+          ``11: 820.0 - 960.0 MHz band, LO divider = 24``
+        pos: 0
+        bits: 3
 
   WOR_CFG1:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description:  eWOR Configuration Reg. 1
     address: 0x21
+    reset_value: 0x08     # 00 001 000
+    fields:
+      WOR_RES:
+        description: |
+          eWOR timer resolution.
+          Controls the tEvent0 and RX timeout resolution.
+            t_Event0 = (1 / f_RCOSC) *  EVENT0 * 2 ^ (5*WOR_RES) [s]
+          and
+            RX Timeout = MAX[1, FLOOR(EVENT0 / 2^RFEND_CFG1.RX_TIME)] * (2 ^ (4 * WOR_RES)) * (1250 / fxosc) [s]
+
+          ``0``: High resolution
+          ``1``: Medium high resolution
+          ``2``: Medium low resolution
+          ``3``: Low resolution
+        pos: 6
+        bits: 2
+      WOR_MODE:
+        description: |
+          eWOR mode
+          ``0``: Feedback mode
+          ``1``: Normal mode
+          ``2``: Legacy mode
+          ``3``: Event1 mask mode
+          ``4``: Event0 mask mode
+      EVENT1:
+        description: |
+          Event 1 timeout:
+          t_Event1 = (1 / fRCOSC) * WOR_EVENT1 [s]
+          ``0:  4``
+          ``1:  6``
+          ``2:  8``
+          ``3: 12``
+          ``4: 16``
+          ``5: 24``
+          ``6: 32``
+          ``7: 48``
 
   WOR_CFG0:
     devices:
@@ -1366,15 +1624,18 @@ registers:
     devices:
       - cc11xx
       - cc120x
-    description:
+    description: |
+      In fixed length mode this field indicates the packet length,
+      and a value of 0 indicates the length to be 256 bytes.
+      In variable length packet mode, this value indicates the maximum allowed packet length.
     address: 0x2E
 
   EXTENDED_ADDRESS:
     devices:
       - cc11xx
       - cc120x
-    description:
     address: 0x2F
+    reset_value: 0x00
 
 # Command Strobes may be viewed as single byte instructions to CC120X.
 # By addressing a command strobe register, internal sequences will be started.
